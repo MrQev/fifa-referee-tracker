@@ -4,7 +4,7 @@ import requests
 from playwright.sync_api import sync_playwright
 
 X_PROFILE_URL = "https://x.com/FIFAcom"
-KEYWORDS = ["match officials", "referee", "rozhodčí", "referees", "appointment"]
+KEYWORDS = ["match officials", "referee", "referees", "appointment"]
 NTFY_TOPIC = "fifa_rozhodci_alert_2026"  # Změň na svůj ntfy kanál
 DB_FILE = "last_tweet_id.txt"
 
