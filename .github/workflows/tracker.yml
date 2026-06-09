@@ -31,6 +31,7 @@ jobs:
     - name: Spuštění sledovače
       env:
         X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
+        GOOGLE_CHAT_WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
       run: python tracker.py
 
     - name: Uložení stavu (Commit změny ID tweetu)
