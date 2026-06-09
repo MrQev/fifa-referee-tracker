@@ -2,9 +2,13 @@ name: FIFA Tweet Tracker
 
 on:
   schedule:
-    # Spouští se každých 15 minut (GitHub cron limit pro bezplatné účty)
+    # Spouští se každých 15 minut
     - cron: '*/15 * * * *'
   workflow_dispatch: # Umožní spustit skript i ručně tlačítkem
+
+env:
+  # Odstraní varování ohledně Node.js 20 a vynutí bezpečný chod na Node 24
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   run-tracker:
@@ -17,7 +21,7 @@ jobs:
     - name: Nastavení Pythonu
       uses: actions/setup-python@v5
       with:
-        python-python: '3.11'
+        python-version: '3.11' # Zde byl opraven překlep z 'python-python'
 
     - name: Instalace závislostí
       run: |
