@@ -1,0 +1,38 @@
+name: FIFA Tweet Tracker
+
+on:
+  schedule:
+    # Spouští se každých 15 minut (GitHub cron limit pro bezplatné účty)
+    - cron: '*/15 * * * *'
+  workflow_dispatch: # Umožní spustit skript i ručně tlačítkem
+
+jobs:
+  run-tracker:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repozitáře
+      uses: actions/checkout@v4
+
+    - name: Nastavení Pythonu
+      uses: actions/setup-python@v5
+      with:
+        python-python: '3.11'
+
+    - name: Instalace závislostí
+      run: |
+        pip install playwright requests
+        playwright install chromium
+
+    - name: Spuštění sledovače
+      env:
+        X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
+      run: python tracker.py
+
+    - name: Uložení stavu (Commit změny ID tweetu)
+      run: |
+        git config --global user.name "GitHub Action Bot"
+        git config --global user.email "actions@github.com"
+        git add last_tweet_id.txt
+        git commit -m "Aktualizace posledního tweet ID [skip ci]" || exit 0
+        git push
