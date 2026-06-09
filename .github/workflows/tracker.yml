@@ -2,8 +2,8 @@ name: FIFA Tweet Tracker
 
 on:
   schedule:
-    # Spouští se každých 15 minut
-    - cron: '*/15 * * * *'
+    # Spouští se 4x za hodinu
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch: # Umožní spustit skript i ručně tlačítkem
 
 env:
