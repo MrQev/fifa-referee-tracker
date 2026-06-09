@@ -13,11 +13,14 @@ X_AUTH_TOKEN = os.environ.get("X_AUTH_TOKEN")
 
 def send_notification(text, url):
     try:
+        # Emoji jsme přesunuli sem do 'data', kde je bezpečně zakódované v UTF-8
+        message_body = f"🚨 FIFA zveřejnila rozhodčí!\n\n{text}"
+        
         requests.post(
             f"https://ntfy.sh/{NTFY_TOPIC}",
-            data=f"FIFA zveřejnila rozhodčí!\n\n{text}".encode('utf-8'),
+            data=message_body.encode('utf-8'),
             headers={
-                "Title": "🚨 NOVÍ ROZHODČÍ OZNÁMENI",
+                "Title": "FIFA Rozhodci Alert",  # Bez emoji, aby knihovna requests neprotestovala
                 "Click": url,
                 "Priority": "high"
             }
