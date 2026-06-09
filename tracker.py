@@ -5,27 +5,31 @@ from playwright.sync_api import sync_playwright
 
 X_PROFILE_URL = "https://x.com/FIFAcom"
 KEYWORDS = ["match officials", "referee", "referees", "appointment"]
-NTFY_TOPIC = "fifa_rozhodci_alert_2026"  # Změň na svůj ntfy kanál
 DB_FILE = "last_tweet_id.txt"
 
-# Načtení tokenu z tajných proměnných GitHubu
+# Načtení tajných proměnných z GitHubu
 X_AUTH_TOKEN = os.environ.get("X_AUTH_TOKEN")
+GOOGLE_CHAT_WEBHOOK = os.environ.get("GOOGLE_CHAT_WEBHOOK")
 
 def send_notification(text, url):
-    try:
-        # Emoji jsme přesunuli sem do 'data', kde je bezpečně zakódované v UTF-8
-        message_body = f"🚨 FIFA zveřejnila rozhodčí!\n\n{text}"
+    if not GOOGLE_CHAT_WEBHOOK:
+        print("Chyba: GOOGLE_CHAT_WEBHOOK nenalezen v prostředí!")
+        return
         
-        requests.post(
-            f"https://ntfy.sh/{NTFY_TOPIC}",
-            data=message_body.encode('utf-8'),
-            headers={
-                "Title": "FIFA Rozhodci Alert",  # Bez emoji, aby knihovna requests neprotestovala
-                "Click": url,
-                "Priority": "high"
-            }
-        )
-        print("Notifikace odeslána na mobil.")
+    try:
+        # Google Chat podporuje základní markdown formátování (* pro tučné)
+        payload = {
+            "text": f"🚨 *FIFA zveřejnila rozhodčí!*\n\n{text}\n\n🔗 *Odkaz na tweet:* {url}"
+        }
+        
+        # Odeslání požadavku jako JSON do Google Chatu
+        response = requests.post(GOOGLE_CHAT_WEBHOOK, json=payload)
+        
+        if response.status_code == 200:
+            print("Zpráva úspěšně odeslána do Google Chatu.")
+        else:
+            print(f"Google Chat vrátil chybu: {response.status_code} - {response.text}")
+            
     except Exception as e:
         print(f"Chyba notifikace: {e}")
 
