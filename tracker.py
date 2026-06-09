@@ -12,7 +12,7 @@ GOOGLE_CHAT_WEBHOOK = os.environ.get("GOOGLE_CHAT_WEBHOOK")
 
 def send_notification(text, url):
     if not GOOGLE_CHAT_WEBHOOK:
-        print("Chyba: GOOGLE_CHAT_WEBHOOK nenalezen!")
+        print("Chyba: GOOGLE_CHAT_WEBHOOK chybí!")
         return
     try:
         payload = {"text": f"🚨 *FIFA zveřejnila rozhodčí!*\n\n{text}\n\n🔗 *Odkaz:* {url}"}
@@ -31,7 +31,10 @@ def check_tweets():
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        
         context.add_cookies([{
             "name": "auth_token",
             "value": X_AUTH_TOKEN,
@@ -43,40 +46,41 @@ def check_tweets():
         print(f"Otevírám {X_PROFILE_URL}...")
         page.goto(X_PROFILE_URL)
         
-        # Počkáme na vykreslení prvního tweetu
+        # Počkáme na načtení tweetů a dáme tomu pevnou pauzu na stabilizaci
         page.wait_for_selector('article[data-testid="tweet"]', timeout=15000)
+        time.sleep(5)
         
-        # --- NOVINKA: Odrolování dolů pro načtení starších tweetů ---
-        print("Skroluji dolů pro načtení starší historie...")
-        for _ in range(3):
-            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            time.sleep(2) # Čas na načtení další dávky tweetů
-            
+        # ŽÁDNÉ SCROLLOVÁNÍ - bereme rovnou to, co je nahoře
         tweets = page.locator('article[data-testid="tweet"]').all()
-        print(f"Celkem nalezeno tweetů k analýze: {len(tweets)}")
+        print(f"Načteno nejnovějších tweetů z vrchu stránky: {len(tweets)}")
         
         last_processed_id = ""
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "r") as f:
                 last_processed_id = f.read().strip()
-        print(f"ID posledního zpracovaného tweetu z minula: '{last_processed_id}'")
 
         found_match = False
-        for i, tweet in enumerate(tweets, 1):
+        valid_tweet_counter = 0
+        
+        for tweet in tweets:
             try:
                 text_element = tweet.locator('div[data-testid="tweetText"]')
                 if text_element.count() == 0:
                     continue
                 tweet_text = text_element.inner_text()
                 
+                # Zkusíme vytáhnout čas tweetu pro lepší přehled v logu
+                time_element = tweet.locator('time')
+                tweet_time = time_element.get_attribute("datetime") if time_element.count() > 0 else "Neznámý čas"
+                
                 link_element = tweet.locator('a[href*="/status/"]').first
                 href = link_element.get_attribute("href")
                 tweet_id = href.split("/status/")[1].split("?")[0]
                 tweet_url = f"https://x.com{href}"
                 
-                # --- NOVINKA: Debug výpis pro každý kontrolovaný tweet ---
-                short_text = tweet_text.replace('\n', ' ')[:50]
-                print(f" [{i}] Kontrola ID {tweet_id} | Text: {short_text}...")
+                valid_tweet_counter += 1
+                short_text = tweet_text.replace('\n', ' ')[:40]
+                print(f" [{valid_tweet_counter}] ID: {tweet_id} | Čas: {tweet_time} | Text: {short_text}...")
                 
                 if tweet_id == last_processed_id:
                     print(f"-> Stop: Narazili jsme na ID z minula ({tweet_id}).")
@@ -84,20 +88,19 @@ def check_tweets():
                 
                 text_lower = tweet_text.lower()
                 if any(kw in text_lower for kw in KEYWORDS):
-                    print(f"-> Žhavá stopa! Nalezen odpovídající tweet: {tweet_id}")
+                    print(f"-> Nalezen odpovídající tweet: {tweet_id}")
                     send_notification(tweet_text, tweet_url)
                     
                     with open(DB_FILE, "w") as f:
                         f.write(tweet_id)
                     found_match = True
-                    break # Zpracovali jsme nejnovější shodu a končíme
+                    break
                     
             except Exception as e:
-                print(f"Chyba parsování u tweetu č. {i}: {e}")
                 continue
         
-        if not found_match:
-            print("Analýza dokončena. Žádný nový tweet nevyhovoval klíčovým slovům.")
+        if not found_match and valid_tweet_counter > 0:
+            print("Analýza dokončena. Žádný z vrchních tweetů nevyhovoval klíčovým slovům.")
             
         browser.close()
 
