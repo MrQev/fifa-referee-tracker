@@ -58,18 +58,15 @@ def check_tweets():
         scraped_tweets = {}
         reached_end_of_timeframe = False
         scroll_attempts = 0
-        max_scroll_attempts = 15  # Pojistka proti nekonečnému cyklu
+        max_scroll_attempts = 15
         
         print("Spouštím postupné scrollování a sběr dnešních/včerejších tweetů...")
         
         while not reached_end_of_timeframe and scroll_attempts < max_scroll_attempts:
-            # Najdeme aktuálně viditelné tweety na obrazovce
             visible_tweets = page.locator('article[data-testid="tweet"]').all()
-            new_tweets_in_this_scroll = 0
             
             for tweet in visible_tweets:
                 try:
-                    # Přeskočení pinned tweetu
                     if tweet.locator('text="Pinned"').count() > 0 or tweet.locator('text="Přišpendlený"').count() > 0:
                         continue
                         
@@ -77,7 +74,6 @@ def check_tweets():
                     href = link_element.get_attribute("href")
                     tweet_id = href.split("/status/")[1].split("?")[0]
                     
-                    # Pokud už tweet máme uložený z předchozího scrollu, přeskočíme ho
                     if tweet_id in scraped_tweets:
                         continue
                     
@@ -88,22 +84,18 @@ def check_tweets():
                     tweet_time_str = time_element.get_attribute("datetime") if time_element.count() > 0 else None
                     
                     if tweet_time_str:
-                        # Převedeme čas tweetu z ISO formátu na Python datetime objekt (UTC)
                         tweet_date = datetime.fromisoformat(tweet_time_str.replace("Z", "+00:00"))
                         
-                        # Pokud narazíme na tweet starší než včerejšek, máme vše, co jsme chtěli
                         if tweet_date < yesterday_start:
-                            print(f"-> Dosažen tweet z předvčerejška ({tweet_date.strftime('%Y-%m-%d')}). Zastavuji sběr dat.")
+                            print(f"-> Dosažen tweet z předvčerejška ({tweet_date.strftime('%Y-%m-%d')}). Zastavuji sběr.")
                             reached_end_of_timeframe = True
                             break
                         
-                        # Uložíme si data o tweetu
                         scraped_tweets[tweet_id] = {
                             "text": tweet_text,
                             "url": f"https://x.com{href}",
                             "date": tweet_date
                         }
-                        new_tweets_in_this_scroll += 1
                         
                 except Exception:
                     continue
@@ -111,23 +103,24 @@ def check_tweets():
             if reached_end_of_timeframe:
                 break
                 
-            # Jemný posun dolů pro načtení další dávky
             page.evaluate("window.scrollBy(0, 600)")
             time.sleep(2)
             scroll_attempts += 1
             
-        print(f"Sběr dokončen. Celkem nalezeno unikátních tweetů za sledované období: {len(scraped_tweets)}")
+        print(f"Sběr dokončen. Unikátních tweetů za sledované období: {len(scraped_tweets)}")
         
-        # Načtení ID posledního zpracovaného tweetu z minula
-        last_processed_id = ""
+        # --- ZMĚNA: Načtení VŠECH dříve zpracovaných ID do množiny (set) pro bleskové vyhledávání ---
+        processed_ids = set()
         if os.path.exists(DB_FILE):
             with open(DB_FILE, "r") as f:
-                last_processed_id = f.read().strip()
+                # Načte soubor řádek po řádku, ořízne mezery/odřádkování a vynechá prázdné řádky
+                processed_ids = {line.strip() for line in f if line.strip()}
+        print(f"Celkem v databázi uložených ID z minulosti: {len(processed_ids)}")
 
-        # Seřadíme tweety od nejstaršího po nejnovější, abychom správně ukládali last_tweet_id
+        # Seřadíme od nejstaršího po nejnovější
         sorted_tweets = sorted(scraped_tweets.items(), key=lambda x: x[1]["date"])
         
-        found_match = False
+        new_matches_found = False
         counter = 0
         
         for tweet_id, data in sorted_tweets:
@@ -135,24 +128,26 @@ def check_tweets():
             short_text = data["text"].replace('\n', ' ')[:40]
             print(f" [{counter}] ID: {tweet_id} | Datum: {data['date'].strftime('%Y-%m-%d %H:%M')} | Text: {short_text}...")
             
-            # Kontrola, zda jsme tento tweet už neviděli v minulých bězích skriptu
-            if tweet_id == last_processed_id:
-                print(f"-> Info: ID {tweet_id} odpovídá zarážce z minulého spuštění. Jdu dál (kontrola novějších).")
+            # --- ZMĚNA: Kontrola, zda ID existuje KDEKOLIV v historii souboru ---
+            if tweet_id in processed_ids:
+                print(f"-> Ignorováno: ID {tweet_id} už v historii existuje.")
                 continue
             
             text_lower = data["text"].lower()
             if any(kw in text_lower for kw in KEYWORDS):
-                print(f"-> 🎯 SHODA! Nalezen nový odpovídající tweet: {tweet_id}")
+                print(f"-> 🎯 NOVÁ SHODA! Nalezen odpovídající tweet: {tweet_id}")
                 send_notification(data["text"], data["url"])
                 
-                # Uložíme si toto ID jako poslední zpracované
-                with open(DB_FILE, "w") as f:
-                    f.write(tweet_id)
-                last_processed_id = tweet_id
-                found_match = True
+                # --- ZMĚNA: Zápis nového ID na konec souboru (režim 'a' jako append) ---
+                with open(DB_FILE, "a") as f:
+                    f.write(f"{tweet_id}\n")
+                
+                # Přidáme ho i do aktuální sady, abychom ho v rámci jednoho běhu znova nezpracovali
+                processed_ids.add(tweet_id)
+                new_matches_found = True
 
-        if not found_match and len(scraped_tweets) > 0:
-            print("Analýza dokončena. Žádný z dnešních ani včerejších tweetů neobsahoval klíčová slova.")
+        if not new_matches_found and len(scraped_tweets) > 0:
+            print("Analýza dokončena. Žádný nový tweet nevyhovoval podmínkám.")
             
         browser.close()
 
