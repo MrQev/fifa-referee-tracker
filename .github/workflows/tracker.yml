@@ -37,8 +37,8 @@ jobs:
         SOURCE: ${{ github.event.inputs.source }}
       run: python tracker.py
 
-    - name: Nahrání diagnostiky při chybě
-      if: failure()
+    - name: Nahrání diagnostiky (pokud vznikla)
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: debug-screenshots
