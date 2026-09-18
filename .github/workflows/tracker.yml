@@ -1,10 +1,12 @@
 name: FIFA Tweet Tracker
 
 on:
-  schedule:
-    # Spouští se 4x za hodinu
-    - cron: '7,22,37,52 * * * *'
-  workflow_dispatch: # Umožní spustit skript i ručně tlačítkem
+  workflow_dispatch: # Spouští se výhradně přes API (externí cron-joby) nebo ručně tlačítkem
+    inputs:
+      source:
+        description: "Který zdroj zpracovat: 'fifa', 'rfef', 'fifa,rfef', nebo prázdné = všechny"
+        required: false
+        default: ""
 
 env:
   # Odstraní varování ohledně Node.js 20 a vynutí bezpečný chod na Node 24
@@ -32,12 +34,13 @@ jobs:
       env:
         X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
         GOOGLE_CHAT_WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+        SOURCE: ${{ github.event.inputs.source }}
       run: python tracker.py
 
-    - name: Uložení stavu (Commit změny ID tweetu)
+    - name: Uložení stavu (Commit změny ID tweetů)
       run: |
         git config --global user.name "GitHub Action Bot"
         git config --global user.email "actions@github.com"
-        git add last_tweet_id.txt
-        git commit -m "Aktualizace posledního tweet ID [skip ci]" || exit 0
+        git add last_tweet_id_*.txt
+        git commit -m "Aktualizace posledních tweet ID [skip ci]" || exit 0
         git push
