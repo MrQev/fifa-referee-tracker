@@ -103,7 +103,23 @@ def check_source(source, page, yesterday_start):
     print(f"Otevírám {profile_url}...")
     page.goto(profile_url)
 
-    page.wait_for_selector('article[data-testid="tweet"]', timeout=15000)
+    try:
+        page.wait_for_selector('article[data-testid="tweet"]', timeout=20000)
+    except Exception as e:
+        # Uložíme screenshot a HTML pro diagnostiku, ať víme, co X místo timeline zobrazil
+        debug_dir = "debug"
+        os.makedirs(debug_dir, exist_ok=True)
+        safe_name = source["name"].lower()
+        screenshot_path = os.path.join(debug_dir, f"{safe_name}_timeout.png")
+        html_path = os.path.join(debug_dir, f"{safe_name}_timeout.html")
+        try:
+            page.screenshot(path=screenshot_path, full_page=True)
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write(page.content())
+            print(f"Diagnostika uložena do {screenshot_path} a {html_path}")
+        except Exception as inner_e:
+            print(f"Nepodařilo se uložit diagnostiku: {inner_e}")
+        raise
     time.sleep(3)
 
     scraped_tweets = {}
